@@ -2,6 +2,7 @@ package org.hat.genaishield.api.controller;
 
 import org.hat.genaishield.api.dto.ChatRequest;
 import org.hat.genaishield.api.dto.ChatResponse;
+import org.hat.genaishield.api.privacy.SensitiveDataSanitizer;
 import org.hat.genaishield.core.domain.ActorContext;
 import org.hat.genaishield.core.domain.AiProviderId;
 import org.hat.genaishield.core.domain.DocumentRef;
@@ -16,9 +17,11 @@ import java.util.Set;
 public class ChatController {
 
     private final ChatUseCase chatUseCase;
+    private final SensitiveDataSanitizer sanitizer;
 
-    public ChatController(ChatUseCase chatUseCase) {
+    public ChatController(ChatUseCase chatUseCase, SensitiveDataSanitizer sanitizer) {
         this.chatUseCase = chatUseCase;
+        this.sanitizer = sanitizer;
     }
 
     @PostMapping
@@ -26,6 +29,7 @@ public class ChatController {
                              @RequestHeader(value = "X-Tenant-Id", defaultValue = "demo") String tenantId,
                              @RequestHeader(value = "X-User-Id", defaultValue = "demo-user") String userId,
                              @RequestHeader(value = "X-Roles", defaultValue = "USER") String rolesCsv) {
+        ChatRequest sanitizedReq = sanitizer.sanitizeAnnotated(req);
 
         ActorContext actor = new ActorContext(
                 new Identity(userId, tenantId),
@@ -33,10 +37,10 @@ public class ChatController {
         );
 
         var cmd = new ChatUseCase.ChatCommand(
-                req.sessionId == null ? "default" : req.sessionId,
-                req.question,
-                AiProviderId.from(req.provider == null ? "MISTRAL" : req.provider),
-                (req.documentId == null || req.documentId.isBlank()) ? null : new DocumentRef(req.documentId)
+                sanitizedReq.sessionId == null ? "default" : sanitizedReq.sessionId,
+                sanitizedReq.question,
+                AiProviderId.from(sanitizedReq.provider == null ? "MISTRAL" : sanitizedReq.provider),
+                (sanitizedReq.documentId == null || sanitizedReq.documentId.isBlank()) ? null : new DocumentRef(sanitizedReq.documentId)
         );
 
         var res = chatUseCase.chat(actor, cmd);

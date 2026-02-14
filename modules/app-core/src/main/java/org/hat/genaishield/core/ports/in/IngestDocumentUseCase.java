@@ -1,6 +1,7 @@
 package org.hat.genaishield.core.ports.in;
 
 import org.hat.genaishield.core.domain.ActorContext;
+import org.hat.genaishield.core.domain.AiProviderId;
 import org.hat.genaishield.core.domain.Classification;
 import org.hat.genaishield.core.domain.DocumentRef;
 
@@ -17,6 +18,7 @@ public interface IngestDocumentUseCase {
         private final String filename;
         private final String contentType;
         private final long sizeBytes;
+        private final AiProviderId provider;
         private final Classification classification;
         private final List<String> allowedRoles;
         private final Map<String, String> attributes;
@@ -25,6 +27,7 @@ public interface IngestDocumentUseCase {
         public IngestCommand(String filename,
                              String contentType,
                              long sizeBytes,
+                             AiProviderId provider,
                              Classification classification,
                              List<String> allowedRoles,
                              Map<String, String> attributes,
@@ -32,6 +35,7 @@ public interface IngestDocumentUseCase {
             this.filename = requireNonBlank(filename, "filename");
             this.contentType = requireNonBlank(contentType, "contentType");
             this.sizeBytes = sizeBytes;
+            this.provider = Objects.requireNonNullElse(provider, AiProviderId.MISTRAL);
             this.classification = Objects.requireNonNullElse(classification, Classification.INTERNAL);
             this.allowedRoles = List.copyOf(allowedRoles == null ? List.of() : allowedRoles);
             this.attributes = Map.copyOf(attributes == null ? Map.of() : attributes);
@@ -48,6 +52,10 @@ public interface IngestDocumentUseCase {
 
         public long sizeBytes() {
             return sizeBytes;
+        }
+
+        public AiProviderId provider() {
+            return provider;
         }
 
         public Classification classification() {

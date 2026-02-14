@@ -6,7 +6,6 @@ spring:
     url: jdbc:postgresql://localhost:5432/genaishield
     username: genaishield
     password: genaishield
-  # utile pour dev ; en prod on mettrait migrations (Flyway/Liquibase)
   sql:
     init:
       mode: never
@@ -14,23 +13,29 @@ spring:
     mistralai:
       api-key: ${MISTRAL_API_KEY:}
       chat:
+        enabled: ${MISTRAL_CHAT_ENABLED:true}
         options:
-          model: mistral-large-latest
-      ollama:
-        base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-        chat:
-          options:
-            model: llama3.1:8b
-        embedding:
-          options:
-            model: nomic-embed-text:latest
-
-      vectorstore:
-        pgvector:
-          initialize-schema: true
-          table-name: vector_store
-          index-type: hnsw
-          distance-type: cosine
+          model: ${MISTRAL_CHAT_MODEL:mistral-large-latest}
+      embedding:
+        enabled: ${MISTRAL_EMBEDDING_ENABLED:true}
+        options:
+          model: ${MISTRAL_EMBED_MODEL:mistral-embed}
+    ollama:
+      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+      chat:
+        enabled: ${OLLAMA_CHAT_ENABLED:true}
+        options:
+          model: ${OLLAMA_CHAT_MODEL:llama3.1:8b}
+      embedding:
+        enabled: ${OLLAMA_EMBEDDING_ENABLED:false}
+        options:
+          model: ${OLLAMA_EMBED_MODEL:nomic-embed-text:latest}
+    vectorstore:
+      pgvector:
+        initialize-schema: true
+        table-name: vector_store
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
 
 management:
   endpoints:
@@ -38,4 +43,10 @@ management:
       exposure:
         include: health,info,metrics,prometheus
 
-# --- Spring AI Providers ---
+security:
+  rate-limit:
+    capacity-per-minute: 60
+
+genaishield:
+  embedding:
+    primary: ${GENAISHIELD_PRIMARY_EMBEDDING:MISTRAL}

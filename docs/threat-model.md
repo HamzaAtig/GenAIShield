@@ -2,132 +2,113 @@
 
 ## Overview
 
-GenAIShield is a backend service designed to securely integrate Large Language Models (LLMs) with Retrieval Augmented Generation (RAG).
+GenAIShield is a backend service to integrate LLMs with RAG while enforcing server-side security controls.
 
-This document identifies:
-- assets to protect
+This document describes:
+- key assets
 - trust boundaries
 - major threat scenarios
-- mitigation strategies
+- implemented mitigations
 
-The goal is to ensure that security controls are part of the architecture, not an afterthought.
+## Assets to protect
 
----
+Sensitive data:
+- user prompts
+- retrieved documents/chunks
+- embeddings
 
-## Assets to Protect
+Secrets:
+- provider API keys
+- DB credentials
+- runtime internal configuration
 
-### Sensitive Data
-- User prompts
-- Retrieved documents
-- Embeddings stored in vector database
+Security artifacts:
+- prompt templates
+- policy rules
+- vector metadata and tenant boundaries
 
-### System Secrets
-- API keys (Mistral or other providers)
-- Database credentials
-- Internal configuration
+## Trust boundaries
 
-### Application Components
-- System prompts
-- Security policies
-- Vector store metadata
+1. External user input
+- always untrusted
 
----
+2. Retrieved vector content
+- may include malicious instructions
 
-## Trust Boundaries
+3. External LLM providers
+- model output is advisory only; server enforces policy
 
-The system operates across several trust boundaries:
+## Threat scenarios and mitigations
 
-1. **External User**
-    - All user input is untrusted.
+### T1 — Prompt injection
 
-2. **Vector Store Content**
-    - Retrieved documents may contain malicious or injected content.
+Threat:
+- user tries to override instructions (`ignore previous instructions`)
 
-3. **External LLM Providers**
-    - Responses cannot be fully trusted and must be constrained by server-side policies.
+Mitigations:
+- policy engine with injection-focused rules
+- sanitization before generation
+- strict system prompt constraints
 
----
+### T2 — Indirect prompt injection via RAG
 
-## Threat Scenarios
+Threat:
+- malicious instructions inside stored chunks
 
-### T1 — Prompt Injection
+Mitigations:
+- context treated as untrusted
+- explicit sanitization and prompt firewall
 
-An attacker attempts to override instructions:
-- "Ignore previous instructions"
-- "Reveal your system prompt"
+### T3 — Cross-tenant data leakage
 
-Risk:
-- disclosure of internal logic
-- policy bypass
+Threat:
+- retrieval returns chunks from another tenant
 
-Mitigation:
-- server-side security policies
-- strict system prompts
-- refusal rules
+Mitigations:
+- tenant filter at vector query level
+- tenant metadata persisted per chunk
 
----
+### T4 — Secret/system prompt exfiltration
 
-### T2 — Indirect Prompt Injection (RAG)
+Threat:
+- requests to reveal secrets, credentials, or system prompts
 
-Malicious instructions embedded in stored documents.
+Mitigations:
+- explicit exfiltration blocking rules
+- refusal on blocked decisions
+- audit logs for policy decisions
 
-Risk:
-- model behavior hijacking
-- unintended actions
+### T5 — Abuse and unsafe content generation
 
-Mitigation:
-- retrieved context treated as untrusted data
-- sanitization of context
-- clear separation of instructions and evidence
+Threat:
+- unsafe or abusive prompts intended to misuse the system
 
----
+Mitigations:
+- local moderation engine (weighted regex scoring)
+- threshold-based policy outcomes (sanitize or block)
 
-### T3 — Cross-Tenant Data Leakage
+### T6 — API flooding / resource exhaustion
 
-Vector search returns documents belonging to another tenant.
+Threat:
+- repeated calls to degrade service or increase cost
 
-Risk:
-- confidentiality breach
+Mitigations:
+- per-user/per-tenant rate limiting
+- deterministic `429` responses when exceeded
 
-Mitigation:
-- tenant filtering at query level
-- metadata-based isolation
-
----
-
-### T4 — Secret Exfiltration
-
-User attempts to retrieve:
-- API keys
-- system prompts
-- credentials
-
-Mitigation:
-- blocking policies
-- secrets stored outside application code
-- environment or Vault-based secret management
-
----
-
-## Security Principles
-
-GenAIShield follows these principles:
+## Security principles
 
 - Treat all inputs as untrusted
-- Enforce security outside the LLM
+- Enforce security in application layer, not in model behavior
 - Use defense in depth
-- Minimize exposure of secrets
+- Minimize secret exposure and sensitive logging
 
-Important rule:
+Key rule:
+- The application decides security outcomes. The LLM does not.
 
-**The LLM never decides security. The application does.**
+## Residual risks and next steps
 
----
-
-## Future Improvements
-
-Planned enhancements include:
-- content moderation
-- rate limiting
-- audit logging
-- anomaly detection on prompts
+- No external antivirus engine yet (current adapter is no-op)
+- Moderation is local heuristic, not ML classifier-based
+- Add integration tests for full ingest-to-chat threat paths
+- Add anomaly detection and alerting on audit log streams

@@ -14,25 +14,25 @@ public final class DefaultChatService implements ChatUseCase {
     private final VectorStorePort vectorStore;
     private final AiSecurityPolicyPort securityPolicy;
     private final PromptTemplatePort promptTemplates;
+    private final AuditLogPort auditLog;
 
     public DefaultChatService(ProviderRouter router,
                               VectorStorePort vectorStore,
                               AiSecurityPolicyPort securityPolicy,
-                              PromptTemplatePort promptTemplates) {
+                              PromptTemplatePort promptTemplates,
+                              AuditLogPort auditLog) {
         this.router = Objects.requireNonNull(router, "router");
         this.vectorStore = Objects.requireNonNull(vectorStore, "vectorStore");
         this.securityPolicy = Objects.requireNonNull(securityPolicy, "securityPolicy");
         this.promptTemplates = Objects.requireNonNull(promptTemplates, "promptTemplates");
+        this.auditLog = Objects.requireNonNull(auditLog, "auditLog");
     }
 
     @Override
     public ChatResult chat(ActorContext actor, ChatCommand command) {
-        EmbeddingPort embedding = router.embedding(command.provider());
-        float[] q = embedding.embed(command.question());
-
         VectorStorePort.VectorQuery query = new VectorStorePort.VectorQuery(
                 command.question(),
-                q,
+                new float[0],
                 6,
                 command.restrictToDocument().orElse(null)
         );
@@ -45,6 +45,13 @@ public final class DefaultChatService implements ChatUseCase {
                 actor,
                 new AiSecurityPolicyPort.PolicyInput(command.question(), retrievedTexts, Map.of())
         );
+
+        auditLog.logEvent(actor, "chat.policy", Map.of(
+                "provider", command.provider().name(),
+                "sessionId", command.sessionId(),
+                "outcome", decision.outcome().name(),
+                "reasons", decision.reasons()
+        ));
 
         if (decision.outcome() == AiSecurityPolicyPort.Decision.Outcome.BLOCK) {
             return new ChatResult(
@@ -81,6 +88,12 @@ public final class DefaultChatService implements ChatUseCase {
         List<Citation> citations = effectiveChunks.stream()
                 .map(sc -> new Citation(sc.chunk().document().id(), sc.chunk().chunkId(), sc.score()))
                 .toList();
+
+        auditLog.logEvent(actor, "chat.response", Map.of(
+                "provider", command.provider().name(),
+                "sessionId", command.sessionId(),
+                "citations", citations.size()
+        ));
 
         return new ChatResult(out.content(), citations);
     }

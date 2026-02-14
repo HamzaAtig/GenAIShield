@@ -1,169 +1,105 @@
 # Getting Started — GenAIShield
 
-This guide explains how to:
-1) set up prerequisites  
-2) configure providers  
-3) start local dependencies (PGVector)  
-4) run the API  
-5) test the system  
-
----
+This guide is a full setup path for a new machine.
 
 ## 1) Prerequisites
 
-### Required
-- **Java 21 (JDK)**
-- **Maven 3.9+**
-- **Docker Desktop**
+Required:
+- Java 21
+- Docker Desktop
+- `curl`
 
-### Optional
-- **Ollama** (for local LLM and embeddings)
+Optional:
+- Ollama (if you want local model usage)
 
-### Recommended
-- IntelliJ IDEA or VS Code
+Note:
+- Maven install is not required. Use `./mvnw`.
 
----
-
-## 2) Configuration
-
-GenAIShield uses environment variables to configure providers and database access.
-
-You can either:
-- set environment variables manually
-- or use a `.env` file (recommended)
-
----
-
-### Option A — Using environment variables
-
-#### Windows (PowerShell)
-```powershell
-setx MISTRAL_API_KEY "YOUR_KEY"
-````
-
-Restart the terminal after running `setx`.
-
-#### Linux / macOS
+## 2) Install Java 21 (macOS)
 
 ```bash
-export MISTRAL_API_KEY="YOUR_KEY"
+brew install openjdk@21
 ```
 
----
-
-### Option B — Using a .env file (recommended)
-
-Copy the example file:
+Use Java 21 in current shell:
 
 ```bash
-cp .env.example .env
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21
+export PATH="$JAVA_HOME/bin:$PATH"
+java -version
 ```
 
-Edit the values:
-
-```
-MISTRAL_API_KEY=YOUR_KEY
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
----
-
-## 3) Optional: Using Ollama locally
-
-Install Ollama and pull required models:
+Persist in shell profile:
 
 ```bash
-ollama pull llama3.1:8b
-ollama pull nomic-embed-text
+echo 'export JAVA_HOME=/opt/homebrew/opt/openjdk@21' >> ~/.zshrc
+echo 'export PATH="$JAVA_HOME/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
-Check models:
+## 3) Install and start Docker Desktop
+
+Install:
 
 ```bash
-ollama list
+brew install --cask docker
 ```
 
----
-
-## 4) Optional: Using HashiCorp Vault for Secrets
-
-In production environments, secrets should be retrieved from a secure secret manager such as:
-
-* HashiCorp Vault
-* Azure Key Vault
-* AWS Secrets Manager
-
-GenAIShield is compatible with Spring Cloud Vault.
-
----
-
-### Run Vault locally (development mode)
+Start app:
 
 ```bash
-docker run --cap-add=IPC_LOCK \
-  -e 'VAULT_DEV_ROOT_TOKEN_ID=root' \
-  -e 'VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200' \
-  -p 8200:8200 \
-  hashicorp/vault
+open -a Docker
 ```
 
-Vault UI:
-
-```
-http://localhost:8200
-```
-
-Token:
-
-```
-root
-```
-
----
-
-### Store a secret in Vault
+Wait until Docker is fully started, then verify:
 
 ```bash
-vault kv put secret/genaishield MISTRAL_API_KEY=your_key_here
-```
-
-Spring Boot will automatically resolve:
-
-```
-${MISTRAL_API_KEY}
-```
-
----
-
-## 5) Start PGVector
-
-From the project root:
-
-```bash
-docker compose -f docker/docker-compose.yml up -d
-```
-
-Verify:
-
-```bash
+docker --version
+docker compose version
 docker ps
 ```
 
----
+## 4) Configure provider environment
 
-## 6) Run the API
-
-From the project root:
+For Mistral mode (recommended default):
 
 ```bash
-mvn -pl modules/app-api spring-boot:run
+export MISTRAL_API_KEY="YOUR_KEY"
+export GENAISHIELD_PRIMARY_EMBEDDING=MISTRAL
+export MISTRAL_CHAT_ENABLED=true
+export MISTRAL_EMBEDDING_ENABLED=true
+export OLLAMA_CHAT_ENABLED=false
+export OLLAMA_EMBEDDING_ENABLED=false
 ```
 
-API runs at:
+For Ollama mode:
 
+```bash
+export GENAISHIELD_PRIMARY_EMBEDDING=OLLAMA
+export OLLAMA_CHAT_ENABLED=true
+export OLLAMA_EMBEDDING_ENABLED=true
 ```
-http://localhost:8080
+
+## 5) Start project dependencies
+
+From repo root:
+
+```bash
+docker compose -f docker/docker-compose.yml up -d
+docker ps
 ```
+
+## 6) Build and run API
+
+From repo root:
+
+```bash
+./mvnw -pl modules/app-api -am install -DskipTests
+./mvnw spring-boot:run
+```
+
+API URL:
+- `http://localhost:8080`
 
 Health check:
 
@@ -171,11 +107,9 @@ Health check:
 curl http://localhost:8080/actuator/health
 ```
 
----
+## 7) Smoke tests
 
-## 7) Smoke Test — Chat endpoint
-
-### Using Ollama
+Chat:
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/chat \
@@ -183,115 +117,106 @@ curl -X POST http://localhost:8080/api/v1/chat \
   -H "X-Tenant-Id: demo" \
   -H "X-User-Id: demo-user" \
   -H "X-Roles: USER" \
-  -d "{\"sessionId\":\"s1\",\"provider\":\"OLLAMA\",\"question\":\"What is GenAIShield?\"}"
+  -d '{"sessionId":"s1","provider":"MISTRAL","question":"What is GenAIShield?"}'
 ```
 
-### Using Mistral
+Ingest:
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/chat \
-  -H "Content-Type: application/json" \
+curl -X POST http://localhost:8080/api/v1/ingest \
   -H "X-Tenant-Id: demo" \
   -H "X-User-Id: demo-user" \
   -H "X-Roles: USER" \
-  -d "{\"sessionId\":\"s1\",\"provider\":\"MISTRAL\",\"question\":\"Summarize GenAIShield in two sentences.\"}"
+  -F "file=@/tmp/sample.txt;type=text/plain" \
+  -F "provider=MISTRAL" \
+  -F "classification=INTERNAL" \
+  -F "allowedRoles=USER,ANALYST" \
+  -F 'attributes={"source":"manual-upload"}'
 ```
 
----
+## 8) IntelliJ run configuration
 
-## 8) Running Tests
+Use a Spring Boot run config on `GenAIShieldApplication`.
 
-Run unit tests:
+Set:
+- JRE: Java 21
+- Module classpath: `app-api`
+- Environment variables:
+  - `MISTRAL_API_KEY=...`
+  - `GENAISHIELD_PRIMARY_EMBEDDING=MISTRAL`
+  - `MISTRAL_CHAT_ENABLED=true`
+  - `MISTRAL_EMBEDDING_ENABLED=true`
+  - `OLLAMA_CHAT_ENABLED=false`
+  - `OLLAMA_EMBEDDING_ENABLED=false`
+
+Important:
+- Do not put these values in `VM options`.
+- Do not put these values in `Program arguments`.
+- Do not separate with `;` inside VM options. Use dedicated environment variables.
+
+## 9) Tests
+
+Run all tests:
 
 ```bash
-mvn test
+./mvnw test
 ```
 
-Run integration tests:
+Run API tests only:
 
 ```bash
-mvn -pl modules/app-tests verify
+./mvnw -f modules/app-api/pom.xml test
 ```
 
-Docker must be running for integration tests.
+Run core tests only:
 
----
-
-## 9) Troubleshooting
-
-### API fails to start
-
-* Ensure Docker is running
-* Ensure PGVector container is running
-* Ensure port 5432 is available
-
-### Mistral provider errors
-
-* Verify `MISTRAL_API_KEY` is set
-* Restart terminal after `setx` on Windows
-
-### Ollama provider errors
-
-* Ensure Ollama is running:
-
-```
-ollama ps
+```bash
+./mvnw -f modules/app-core/pom.xml test
 ```
 
-* Ensure models are installed:
+Run end-to-end tests (Docker required):
 
-```
-ollama list
-```
-
----
-
-## 10) Project Structure
-
-```
-modules/
-  app-core     → domain, ports, policies
-  app-infra    → Spring AI adapters, PGVector
-  app-api      → REST controllers, config, prompts
-  app-tests    → integration and security tests
+```bash
+./mvnw -pl modules/app-tests -am -Dtest=ApiE2EIT test
 ```
 
----
+Notes:
+- E2E tests use Testcontainers (`pgvector/pgvector:pg16`).
+- Tests log request purpose, request body, and response status/body in console.
+- `-DskipTests=true` skips execution only; tests still compile.
+- Use `-Dmaven.test.skip=true` to skip test compile + execution.
 
-## 11) Next Steps
+## 10) Troubleshooting
 
-Planned improvements:
+- `release version 21 not supported`
+  - Java is not 21. Fix `JAVA_HOME` and IntelliJ JRE.
 
-* Document ingestion endpoint
-* Red-team security tests
-* Audit logging
-* Tool invocation policies
+- `Unable to find a suitable main class`
+  - Start from API module (`./mvnw spring-boot:run` is already wrapper-fixed).
 
-```
+- `Mistral API key must be set`
+  - `MISTRAL_API_KEY` is missing in the process environment.
 
----
+- `ClassNotFoundException: MISTRAL_API_KEY=...`
+  - Variables were passed as Java args, not environment vars.
 
-# Très important (à faire juste après)
+- `No qualifying bean of type EmbeddingModel ... found 2`
+  - Set `GENAISHIELD_PRIMARY_EMBEDDING` (`MISTRAL` or `OLLAMA`).
 
-Créer le fichier :
+- `more than one 'primary' bean found among candidates`
+  - In tests, disable provider model auto-configs or ensure a single primary `EmbeddingModel`.
 
-```
+- `Failed to obtain JDBC Connection`
+  - PostgreSQL/PGVector is not running. Start Docker and compose stack.
 
-.env.example
+- `Mapped port can only be obtained after the container is started`
+  - Testcontainers datasource was read too early. Ensure container starts before resolving dynamic properties.
 
-```
+- `distance-type ... No enum constant ... cosine`
+  - Use enum names only (already fixed in repo config).
 
-Contenu :
+## 11) Related docs
 
-```
-
-MISTRAL_API_KEY=
-OLLAMA_BASE_URL=[http://localhost:11434](http://localhost:11434)
-
-```
-
-Et ajouter dans `.gitignore` :
-
-```
-
-.env
+- IntelliJ setup: `docs/intellij-setup.md`
+- Extended curl tests: `docs/curl-test-cases.md`
+- Privacy anonymization: `docs/privacy-anonymization.md`

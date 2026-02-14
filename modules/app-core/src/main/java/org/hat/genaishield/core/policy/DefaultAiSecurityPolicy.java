@@ -1,27 +1,28 @@
 package org.hat.genaishield.core.policy;
 
-import org.hat.genaishield.core.domain.ActorContext;
 import org.hat.genaishield.core.ports.out.AiSecurityPolicyPort;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 public final class DefaultAiSecurityPolicy implements AiSecurityPolicyPort {
 
+    private final CompositeAiSecurityPolicy delegate;
+
+    public DefaultAiSecurityPolicy() {
+        this(2.0, 4.0);
+    }
+
+    public DefaultAiSecurityPolicy(double warnThreshold, double blockThreshold) {
+        this.delegate = new CompositeAiSecurityPolicy(List.of(
+                new ExfiltrationRule(),
+                new ModerationRule(LocalModerationEngine.defaultEngine(), warnThreshold, blockThreshold),
+                new PromptInjectionRule(),
+                new DefaultSanitizationRule()
+        ));
+    }
+
     @Override
-    public Decision evaluate(ActorContext actor, PolicyInput input) {
-        String q = input.userPrompt().toLowerCase(Locale.ROOT);
-
-        List<String> reasons = new ArrayList<>();
-
-        // Hard blocks: explicit exfil / system prompt extraction attempts
-        if (q.contains("system prompt") || q.contains("reveal") && (q.contains("key") || q.contains("token") || q.contains("secret"))) {
-            reasons.add("Prompt asks for secrets/system prompt");
-            return new Decision(Decision.Outcome.BLOCK, reasons, Sanitization.none());
-        }
-
-        // Allow but sanitize by default (anti indirect prompt injection)
-        return new Decision(Decision.Outcome.ALLOW_WITH_SANITIZATION, reasons, Sanitization.defaultHardening());
+    public Decision evaluate(org.hat.genaishield.core.domain.ActorContext actor, PolicyInput input) {
+        return delegate.evaluate(actor, input);
     }
 }

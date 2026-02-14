@@ -1,110 +1,110 @@
 # GenAIShield
 
-GenAIShield is a **security-by-design GenAI backend** demonstrating production-grade patterns for integrating LLMs in regulated environments (banking, finance, enterprise systems).
+GenAIShield is a security-by-design GenAI backend for regulated environments (banking, finance, enterprise systems).
 
-- **Spring AI** integration with **multi-provider r**Hexagonal modules**outing** (Mistral + Ollama)
-- **RAG** with **PGVector** (PostgreSQL) as vector store
-- **AI security controls** against common GenAI attack vectors (prompt injection, indirect injection, tool abuse patterns)
-- A **hexagonal architecture** (ports/adapters) to keep domain logic provider-agnostic
+## What it provides
 
----
+- Multi-provider routing (Mistral, Ollama)
+- RAG over PostgreSQL + PGVector
+- Tenant-isolated retrieval boundaries
+- Chat endpoint with citations
+- Document ingestion endpoint (chunking + embeddings + vector upsert)
+- Extensible server-side AI policy engine
+- Local moderation (no external moderation model call)
+- Rate limiting on API endpoints
+- Structured JSON audit logging to dedicated files
+- Correlation ID propagation (`X-Correlation-Id`) with MDC logging
+- Privacy/anonymization layer on DTO inputs + free-text patterns
+- End-to-end integration tests with Testcontainers (PGVector + attack scenarios)
+- Hexagonal architecture (core decoupled from Spring AI and storage)
 
-## Key features
+## Architecture
 
-### Multi-provider LLM routing
-- Chat generation via **Mistral** or **Ollama**
-- Provider selected per request (body/header), without leaking SDK details into core
+- `modules/app-core`: domain, ports, policies, use cases
+- `modules/app-infra`: provider adapters, vector store adapter, infra wiring
+- `modules/app-api`: REST controllers, DTOs, runtime configuration
+- `modules/app-tests`: test module (reserved for broader integration/security tests)
 
-### RAG with PGVector
-- Vector store backed by PostgreSQL + pgvector
-- Retrieval is **tenant-filtered** (hard boundary)
-- Returns **citations** (documentId + chunkId + score)
+Core rule: business logic depends on ports only, not on provider SDKs.
 
-### AI security-by-design
-- Prompt injection & indirect prompt injection defenses
-- Server-side policy enforcement (LLM suggests, server decides)
-- Safe prompt templating (externalized templates)
+## Main APIs
 
-### Clean architecture
-- `app-core`: ports, policies, use cases (no Spring AI / no DB coupling)
-- `app-infra`: adapters (Spring AI providers, PGVector)
-- `app-api`: REST API + config + runtime
-- `app-tests`: integration tests + red-team tests (to be added)
+- `POST /api/v1/chat`
+- `POST /api/v1/ingest` (`multipart/form-data`, file upload)
+- `GET /actuator/health`
 
----
+## Security highlights
 
-## Architecture and Design Principles
-
-GenAIShield is designed following **Hexagonal Architecture (Ports & Adapters)** and **SOLID principles** to ensure maintainability, testability, and provider independence.
-
-### Hexagonal Architecture
-
-The system is structured in distinct layers:
-
-- **app-core**
-    - Domain models
-    - Use cases
-    - Ports (interfaces)
-    - Security policies
-
-- **app-infra**
-    - Adapters for LLM providers (Mistral, Ollama)
-    - Vector store integration (PGVector)
-    - Prompt templates and configuration
-
-- **app-api**
-    - REST controllers
-    - DTOs
-    - Request validation
-    - Error handling
-
-This structure ensures that:
-- business logic does not depend on frameworks
-- infrastructure can be replaced without impacting core logic
-- providers can be swapped easily
-
----
-
-### SOLID Principles
-
-The design follows key SOLID principles:
-
-**Single Responsibility**
-- Use cases, adapters, and policies each have a focused responsibility.
-
-**Open/Closed**
-- New providers or vector stores can be added without modifying core logic.
-
-**Liskov Substitution**
-- Providers implement common ports and can be substituted transparently.
-
-**Interface Segregation**
-- Ports are small and focused (GenerationPort, EmbeddingPort, VectorStorePort).
-
-**Dependency Inversion**
-- Core depends only on interfaces, never on concrete infrastructure.
-
-
-### Project Structure
-
-- `modules/app-core`: domain + ports + use cases + policies
-- `modules/app-infra`: adapters for AI providers and vector store
-- `modules/app-api`: REST controllers, DTOs, error handling
-- `modules/app-tests`: Testcontainers + security test suite
-
-**Core principle:** the domain never depends on Spring AI, only on ports.
-
----
+- Tenant filter enforced at vector query level
+- Prompt-injection hardening (retrieved context treated as untrusted)
+- Exfiltration blocking (system prompt/secrets extraction attempts)
+- Local moderation scoring integrated in policy decisions
+- Default sanitization path for retrieved context
+- Request throttling with Bucket4j
+- Audit trail as structured JSON logs (`logs/audit.log`)
+- Correlation ID echo in responses + MDC enrichment in logs
+- Annotation-driven and regex-based input anonymization
 
 ## Quickstart
 
 ### 1) Start PGVector
+
 ```bash
 docker compose -f docker/docker-compose.yml up -d
 ```
 
+### 2) Build modules
+
+```bash
+./mvnw -pl modules/app-api -am install -DskipTests
+```
+
+### 3) Run API
+
+```bash
+./mvnw spring-boot:run
+```
+
+### 4) Health check
+
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+### 5) Provider mode (Mistral-only example)
+
+```bash
+export MISTRAL_API_KEY="YOUR_KEY"
+export GENAISHIELD_PRIMARY_EMBEDDING=MISTRAL
+export MISTRAL_CHAT_ENABLED=true
+export MISTRAL_EMBEDDING_ENABLED=true
+export OLLAMA_CHAT_ENABLED=false
+export OLLAMA_EMBEDDING_ENABLED=false
+```
+
+Important:
+- In IntelliJ, set these in `Environment variables` (not VM options).
+- Use one variable per entry (`KEY=value`), not Java args.
+
+### 6) E2E Tests (Testcontainers)
+
+```bash
+./mvnw -pl modules/app-tests -am -Dtest=ApiE2EIT test
+```
+
+Coverage includes:
+- health and PGVector extension checks
+- chat and ingest happy paths
+- rate-limiting behavior (`429`)
+- exfiltration and moderation attack attempts
+- RAG poisoning scenario
+- obfuscated payload baseline (documents current regex limitation)
 
 ## Documentation
-- Getting Started → docs/getting-started.md
-- Threat Model → docs/threat-model.md
-- Security Controls → docs/security-controls.md
+
+- Getting Started: `docs/getting-started.md`
+- IntelliJ Setup: `docs/intellij-setup.md`
+- Curl Test Cases: `docs/curl-test-cases.md`
+- Privacy Anonymization: `docs/privacy-anonymization.md`
+- Security Controls: `docs/security-controls.md`
+- Threat Model: `docs/threat-model.md`
