@@ -46,6 +46,6 @@ class ChatControllerMockMvcTest {
                 .andExpect(jsonPath("$.answer", is("ok-answer")))
                 .andExpect(jsonPath("$.citations[0].documentId", is("doc-1")));
 
-        assertEquals("Contact me at [EMAIL]", captured.get().question());
+        assertEquals("Contact me at [[GS_EMAIL_1]]", captured.get().question());
     }
 }

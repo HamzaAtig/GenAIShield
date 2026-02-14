@@ -29,7 +29,8 @@ public class ChatController {
                              @RequestHeader(value = "X-Tenant-Id", defaultValue = "demo") String tenantId,
                              @RequestHeader(value = "X-User-Id", defaultValue = "demo-user") String userId,
                              @RequestHeader(value = "X-Roles", defaultValue = "USER") String rolesCsv) {
-        ChatRequest sanitizedReq = sanitizer.sanitizeAnnotated(req);
+        SensitiveDataSanitizer.SanitizationResult<ChatRequest> sanitized = sanitizer.sanitizeAnnotatedWithContext(req);
+        ChatRequest sanitizedReq = sanitized.value();
 
         ActorContext actor = new ActorContext(
                 new Identity(userId, tenantId),
@@ -46,7 +47,7 @@ public class ChatController {
         var res = chatUseCase.chat(actor, cmd);
 
         ChatResponse out = new ChatResponse();
-        out.answer = res.answer();
+        out.answer = sanitized.context().restore(res.answer());
         out.citations = res.citations().stream().map(c -> {
             ChatResponse.CitationDto dto = new ChatResponse.CitationDto();
             dto.documentId = c.documentId();

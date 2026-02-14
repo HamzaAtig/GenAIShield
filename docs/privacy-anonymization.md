@@ -15,6 +15,7 @@ Three mechanisms are combined:
 1. Annotation-based protection on DTO fields.
 2. Rule-based free-text sanitizer for unstructured text.
 3. Prompt rule reminding the model not to infer hidden values.
+4. Request-scoped token mapping for transparent restore on response.
 
 ## Components
 
@@ -31,6 +32,8 @@ Three mechanisms are combined:
 
 - Chat request:
   - `ChatController` sanitizes annotated fields before building `ChatCommand`.
+  - sensitive fragments are replaced by request tokens (e.g. `[[GS_EMAIL_1]]`).
+  - after LLM response, tokens are restored before sending API response.
   - File: `/Users/olfaallani/git/GenAIShield/modules/app-api/src/main/java/org/hat/genaishield/api/controller/ChatController.java`
 - Ingest request:
   - `IngestController` sanitizes `attributes` before calling ingest use case.
@@ -66,6 +69,10 @@ Notes:
 - IBAN -> `[IBAN]`
 - payment card -> `[CARD_PAN]`
 - secret-like key-value (`apiKey`, `token`, `password`, `secret`) -> `[SECRET]`
+
+Note:
+- internal request/response path uses request-scoped tokens `[[GS_TYPE_N]]` for reversible anonymization.
+- generic placeholders above still apply for non-contextual sanitization paths.
 
 ## Limits and next steps
 

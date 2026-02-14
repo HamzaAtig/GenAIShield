@@ -7,18 +7,32 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 @Component
 public class SensitiveDataSanitizer {
 
     private static final Pattern EMAIL = Pattern.compile("([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\\.[a-zA-Z]{2,})");
-    private static final Pattern PHONE = Pattern.compile("\\b(?:\\+\\d{1,3}[ -]?)?(?:\\(?\\d{2,4}\\)?[ -]?)?\\d{3,4}[ -]?\\d{3,4}\\b");
+    private static final Pattern PHONE = Pattern.compile("(?<!\\w)(?:\\+\\d{1,3}[ -]?)?(?:\\(?\\d{2,4}\\)?[ -]?)?\\d{3,4}[ -]?\\d{3,4}(?!\\w)");
     private static final Pattern IBAN = Pattern.compile("\\b[A-Z]{2}\\d{2}[A-Z0-9]{11,30}\\b");
     private static final Pattern CARD = Pattern.compile("\\b(?:\\d[ -]*?){13,19}\\b");
     private static final Pattern API_KEY = Pattern.compile("(?i)\\b(api[_-]?key|token|secret|password)\\b\\s*[:=]\\s*\\S+");
 
+    public record SanitizationResult<T>(T value, AnonymizationContext context) {}
+
     public <T> T sanitizeAnnotated(T target) {
+        return sanitizeAnnotated(target, null);
+    }
+
+    public <T> SanitizationResult<T> sanitizeAnnotatedWithContext(T target) {
+        AnonymizationContext context = new AnonymizationContext();
+        T sanitized = sanitizeAnnotated(target, context);
+        return new SanitizationResult<>(sanitized, context);
+    }
+
+    private <T> T sanitizeAnnotated(T target, AnonymizationContext context) {
         if (target == null) return null;
         for (Field f : target.getClass().getDeclaredFields()) {
             Sensitive meta = f.getAnnotation(Sensitive.class);
@@ -27,7 +41,7 @@ public class SensitiveDataSanitizer {
             try {
                 String value = (String) f.get(target);
                 if (value == null || value.isBlank()) continue;
-                f.set(target, sanitizeValue(value, meta.type(), meta.action()));
+                f.set(target, sanitizeValue(value, meta.type(), meta.action(), context));
             } catch (IllegalAccessException e) {
                 throw new IllegalStateException("Failed to sanitize field: " + f.getName(), e);
             }
@@ -43,25 +57,49 @@ public class SensitiveDataSanitizer {
     }
 
     public String sanitizeFreeText(String text) {
+        return sanitizeFreeText(text, null);
+    }
+
+    public String sanitizeFreeText(String text, AnonymizationContext context) {
         if (text == null || text.isBlank()) return text;
         String out = text;
-        out = EMAIL.matcher(out).replaceAll("[EMAIL]");
-        out = PHONE.matcher(out).replaceAll("[PHONE]");
-        out = IBAN.matcher(out).replaceAll("[IBAN]");
-        out = CARD.matcher(out).replaceAll("[CARD_PAN]");
-        out = API_KEY.matcher(out).replaceAll("[SECRET]");
+        out = replaceWithTokenOrLiteral(out, EMAIL, SensitiveType.EMAIL, "[EMAIL]", context);
+        out = replaceWithTokenOrLiteral(out, PHONE, SensitiveType.PHONE, "[PHONE]", context);
+        out = replaceWithTokenOrLiteral(out, IBAN, SensitiveType.IBAN, "[IBAN]", context);
+        out = replaceWithTokenOrLiteral(out, CARD, SensitiveType.CARD_PAN, "[CARD_PAN]", context);
+        out = replaceWithTokenOrLiteral(out, API_KEY, SensitiveType.API_KEY, "[SECRET]", context);
         return out;
     }
 
-    private String sanitizeValue(String value, SensitiveType type, SensitiveAction action) {
+    private String sanitizeValue(String value, SensitiveType type, SensitiveAction action, AnonymizationContext context) {
         if (type == SensitiveType.FREE_TEXT) {
-            return sanitizeFreeText(value);
+            return sanitizeFreeText(value, context);
         }
         return switch (action) {
             case REDACT -> "[" + type.name() + "_REDACTED]";
             case MASK -> maskValue(value, type);
             case PSEUDONYMIZE -> pseudonym(type, value);
         };
+    }
+
+    private static String replaceWithTokenOrLiteral(String input,
+                                                    Pattern pattern,
+                                                    SensitiveType type,
+                                                    String fallback,
+                                                    AnonymizationContext context) {
+        if (context == null) {
+            return pattern.matcher(input).replaceAll(fallback);
+        }
+
+        Matcher matcher = pattern.matcher(input);
+        StringBuffer sb = new StringBuffer();
+        while (matcher.find()) {
+            String matched = matcher.group();
+            String token = context.register(type, Objects.requireNonNullElse(matched, ""));
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(token));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     private static String maskValue(String value, SensitiveType type) {

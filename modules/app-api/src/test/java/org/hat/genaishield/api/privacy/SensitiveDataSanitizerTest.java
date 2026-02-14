@@ -30,6 +30,38 @@ class SensitiveDataSanitizerTest {
     }
 
     @Test
+    void contextual_sanitization_restores_original_values_on_output() {
+        SensitiveDataSanitizer sanitizer = new SensitiveDataSanitizer();
+        ChatRequest req = new ChatRequest();
+        req.question = "Contact john.doe@example.com and +33 612345678";
+
+        SensitiveDataSanitizer.SanitizationResult<ChatRequest> result = sanitizer.sanitizeAnnotatedWithContext(req);
+
+        assertNotNull(result.value().question);
+        assertFalse(result.value().question.contains("john.doe@example.com"));
+        assertFalse(result.value().question.contains("612345678"));
+        assertTrue(result.value().question.contains("[[GS_EMAIL_1]]"));
+        assertTrue(result.value().question.contains("[[GS_PHONE_1]]"));
+
+        String llmOutput = "User is [[GS_EMAIL_1]] and phone is [[GS_PHONE_1]].";
+        String restored = result.context().restore(llmOutput);
+        assertEquals("User is john.doe@example.com and phone is +33 612345678.", restored);
+    }
+
+    @Test
+    void contextual_sanitization_preserves_international_phone_format_on_restore() {
+        SensitiveDataSanitizer sanitizer = new SensitiveDataSanitizer();
+        ChatRequest req = new ChatRequest();
+        req.question = "Call me on +1 (415) 555-0199";
+
+        SensitiveDataSanitizer.SanitizationResult<ChatRequest> result = sanitizer.sanitizeAnnotatedWithContext(req);
+
+        assertTrue(result.value().question.contains("[[GS_PHONE_1]]"));
+        String restored = result.context().restore("Dial [[GS_PHONE_1]] now.");
+        assertEquals("Dial +1 (415) 555-0199 now.", restored);
+    }
+
+    @Test
     void supports_mask_redact_and_pseudonymize_actions() {
         SensitiveDataSanitizer sanitizer = new SensitiveDataSanitizer();
         ProbeDto dto = new ProbeDto();

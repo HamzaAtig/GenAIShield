@@ -31,6 +31,23 @@ class ChatControllerTest {
         assertEquals("ok", res.answer);
         assertNotNull(captured.get());
         assertFalse(captured.get().question().contains("john.doe@example.com"));
-        assertTrue(captured.get().question().contains("[EMAIL]"));
+        assertTrue(captured.get().question().contains("[[GS_EMAIL_1]]"));
+    }
+
+    @Test
+    void restores_anonymized_tokens_in_response_before_returning_to_client() {
+        ChatUseCase useCase = (actor, command) -> new ChatUseCase.ChatResult(
+                "I found contact [[GS_EMAIL_1]]", List.of()
+        );
+
+        ChatController controller = new ChatController(useCase, new SensitiveDataSanitizer());
+        ChatRequest req = new ChatRequest();
+        req.sessionId = "s2";
+        req.provider = "MISTRAL";
+        req.question = "contact: john.doe@example.com";
+
+        var res = controller.chat(req, "tenant-a", "alice", "USER");
+
+        assertEquals("I found contact john.doe@example.com", res.answer);
     }
 }
