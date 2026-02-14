@@ -1,0 +1,16 @@
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: genai-shield-pgvector
+    environment:
+      POSTGRES_DB: genaishield
+      POSTGRES_USER: genaishield
+      POSTGRES_PASSWORD: genaishield
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+      - ./initdb:/docker-entrypoint-initdb.d
+
+volumes:
+  pgvector_data:

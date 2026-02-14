@@ -1,0 +1,52 @@
+# =========================
+# Build / Maven
+# =========================
+target/
+*/target/
+*.log
+*.class
+Commande ECHO d‚sactiv‚e.
+# =========================
+# IDE
+# =========================
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+Commande ECHO d‚sactiv‚e.
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+Commande ECHO d‚sactiv‚e.
+# =========================
+# Environment variables
+# =========================
+.env
+.env.*
+!.env.example
+Commande ECHO d‚sactiv‚e.
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+Commande ECHO d‚sactiv‚e.
+# =========================
+# Docker
+# =========================
+docker-data/
+Commande ECHO d‚sactiv‚e.
+# =========================
+# Testcontainers
+# =========================
+.testcontainers.properties
+Commande ECHO d‚sactiv‚e.
+# =========================
+# Misc
+# =========================
+node_modules/
+coverage/
+build/

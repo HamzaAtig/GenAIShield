@@ -1,0 +1,41 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/genaishield
+    username: genaishield
+    password: genaishield
+  # utile pour dev ; en prod on mettrait migrations (Flyway/Liquibase)
+  sql:
+    init:
+      mode: never
+  ai:
+    mistralai:
+      api-key: ${MISTRAL_API_KEY:}
+      chat:
+        options:
+          model: mistral-large-latest
+      ollama:
+        base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
+        chat:
+          options:
+            model: llama3.1:8b
+        embedding:
+          options:
+            model: nomic-embed-text:latest
+
+      vectorstore:
+        pgvector:
+          initialize-schema: true
+          table-name: vector_store
+          index-type: hnsw
+          distance-type: cosine
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+# --- Spring AI Providers ---
