@@ -107,4 +107,5 @@ Coverage includes:
 - Curl Test Cases: `docs/curl-test-cases.md`
 - Privacy Anonymization: `docs/privacy-anonymization.md`
 - Security Controls: `docs/security-controls.md`
+- Hexagonal Architecture & Extensibility: `docs/hexagonal-architecture-and-extensibility.md`
 - Threat Model: `docs/threat-model.md`

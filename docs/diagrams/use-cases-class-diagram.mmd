@@ -1,0 +1,99 @@
+classDiagram
+direction LR
+
+class ChatController {
+  +chat(req, tenantId, userId, roles)
+}
+
+class IngestController {
+  +ingest(file, provider, classification, allowedRoles, attributes)
+}
+
+class SensitiveDataSanitizer {
+  +sanitizeAnnotated(dto)
+  +sanitizeAttributes(map)
+}
+
+class ChatUseCase {
+  <<interface>>
+  +chat(actor, command)
+}
+
+class IngestDocumentUseCase {
+  <<interface>>
+  +ingest(actor, command)
+}
+
+class DefaultChatService {
+  -router
+  -vectorStore
+  -securityPolicy
+  -promptTemplates
+  -auditLog
+}
+
+class DefaultIngestService {
+  -router
+  -splitter
+  -vectorStore
+  -antivirus
+  -auditLog
+}
+
+class ProviderRouter {
+  <<interface>>
+  +generation(providerId)
+  +embedding(providerId)
+}
+
+class AiSecurityPolicyPort {
+  <<interface>>
+  +evaluate(actor, policyInput)
+}
+
+class CompositeAiSecurityPolicy
+class ExfiltrationRule
+class PromptInjectionRule
+class ModerationRule
+class DefaultSanitizationRule
+class LocalModerationEngine
+
+class VectorStorePort {
+  <<interface>>
+  +upsert(actor, chunks)
+  +search(actor, query)
+}
+
+class PgVectorStoreAdapter
+class AuditLogPort {
+  <<interface>>
+  +logEvent(actor, eventType, payload)
+}
+class JsonAuditLogAdapter
+class RateLimitingFilter
+class CorrelationIdFilter
+
+ChatController --> SensitiveDataSanitizer
+ChatController --> ChatUseCase
+IngestController --> SensitiveDataSanitizer
+IngestController --> IngestDocumentUseCase
+
+DefaultChatService ..|> ChatUseCase
+DefaultIngestService ..|> IngestDocumentUseCase
+DefaultChatService --> ProviderRouter
+DefaultChatService --> VectorStorePort
+DefaultChatService --> AiSecurityPolicyPort
+DefaultChatService --> AuditLogPort
+DefaultIngestService --> ProviderRouter
+DefaultIngestService --> VectorStorePort
+DefaultIngestService --> AuditLogPort
+
+CompositeAiSecurityPolicy ..|> AiSecurityPolicyPort
+CompositeAiSecurityPolicy --> ExfiltrationRule
+CompositeAiSecurityPolicy --> PromptInjectionRule
+CompositeAiSecurityPolicy --> ModerationRule
+CompositeAiSecurityPolicy --> DefaultSanitizationRule
+ModerationRule --> LocalModerationEngine
+
+PgVectorStoreAdapter ..|> VectorStorePort
+JsonAuditLogAdapter ..|> AuditLogPort
